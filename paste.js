@@ -1,242 +1,296 @@
-/* 
-paste.js is an interface to read data ( text / image ) from clipboard in different browsers. It also contains several hacks.
+var Paste = (function () {
 
-https://github.com/layerssss/paste.js
- */
+	// создание ловушки для вставляемых данных
+	var createHiddenEditable = function () {
+		var elem = document.createElement('div');
 
-(function() {
-  var $, Paste, createHiddenEditable;
+		elem.setAttribute('contenteditable', true);
+		elem.setAttribute('aria-hidden', true);
+		elem.setAttribute('tabindex', -1);
+		elem.style.cssText = ' \
+			width: 1px; \
+			height: 1px; \
+			position: fixed; \
+			left: -100px; \
+			overflow: hidden;';
 
-  $ = window.jQuery;
+		return elem;
+	};
 
-  $.paste = function(pasteContainer) {
-    var pm;
-    if (typeof console !== "undefined" && console !== null) {
-      console.log("DEPRECATED: This method is deprecated. Please use $.fn.pastableNonInputable() instead.");
-    }
-    pm = Paste.mountNonInputable(pasteContainer);
-    return pm._container;
-  };
+	// генерация событий
+	var trigger = function (elem, name, data) {
+		var event;
+		var HTMLEvents = ['change'];
+		
+		if (HTMLEvents.indexOf[name] > -1) {
+			event = document.createEvent('HTMLEvents');
+			event.initEvent(name, true, false);
+		}
+		else {
+			if (window.CustomEvent) {
+				event = new CustomEvent(name, { detail: data });
+			}
+			else {
+				event = document.createEvent('CustomEvent');
+				event.initCustomEvent(name, true, true, data);
+			};
+		};
 
-  $.fn.pastableElement = function() {
-    var el, _i, _len;
-    for (_i = 0, _len = this.length; _i < _len; _i++) {
-      el = this[_i];
-      if (el.tagName === 'TEXTAREA') {
-        Paste.mountTextarea(el);
-      } else if (!!el.hasAttribute('contenteditable')) {
-        Paste.mountContenteditable(el);
-      } else {
-        Paste.mountNonInputable(el);
-      };
-    };
-    return this;
-  };
+		elem.dispatchEvent(event);
+	};
 
-  createHiddenEditable = function() {
-    return $(document.createElement('div')).attr('contenteditable', true).css({
-      width: 1,
-      height: 1,
-      position: 'fixed',
-      left: -100,
-      overflow: 'hidden'
-    });
-  };
+	// конвертация закодированного изображения в объект
+	var dataURItoBlob = function (dataURI) {
+		var bytes = atob(dataURI.split(',')[1]);
+		var mime = dataURI.split(',')[0].split(':')[1].split(';')[0];
+		var len = bytes.length;
+		var arr = new Uint8Array(len);
+		
+		for (var i = 0; i < len; i++ ) {
+			arr[i] = bytes.charCodeAt(i);
+		};
 
-  Paste = (function() {
+		return new Blob([arr], { type: mime });
+	};
 
-    // Element to receive final events.
-    Paste.prototype._target = null;
+	Paste.prototype._target = null;
+	Paste.prototype._container = null;
 
-    // Actual element to do pasting.
-    Paste.prototype._container = null;
+	Paste.init = function (elems) {
+		if (typeof elems === 'string') {
+			elems = document.querySelectorAll(elems);
+		}
+		else if (!elems.isArray) {
+			elems = [].push(elems);
+		};
 
-    Paste.mountNonInputable = function(nonInputable) {
-      var paste;
-      paste = new Paste(createHiddenEditable().appendTo(nonInputable), nonInputable);
-      $(nonInputable).on('click', (function(_this) {
-        return function() {
-          return paste._container.focus();
-        };
-      })(this));
-      paste._container.on('focus', (function(_this) {
-        return function() {
-          return $(nonInputable).addClass('pastable-focus');
-        };
-      })(this));
-      return paste._container.on('blur', (function(_this) {
-        return function() {
-          return $(nonInputable).removeClass('pastable-focus');
-        };
-      })(this));
-    };
+		[].forEach.call(elems, function (elem) {
+			if (elem.getAttribute('data-paste-inited')) { return; };
+			
+			if (elem.tagName === 'TEXTAREA') {
+				Paste.initTextarea(elem);
+			}
+			else if (!!elem.hasAttribute('contenteditable')) {
+				Paste.initContenteditable(elem);
+			}
+			else {
+				Paste.initNonInputable(elem);
+			};
+			
+			elem.setAttribute('data-paste-inited', true);
+		});
 
-    // Firefox & IE
-    Paste.mountTextarea = function(textarea) {
-      var ctlDown, paste;
-      if (!(window.ClipboardEvent || window.clipboardData)) {
-        return this.mountContenteditable(textarea);
-      }
-      paste = new Paste(createHiddenEditable().insertBefore(textarea), textarea);
-      ctlDown = false;
-      $(textarea).on('keyup', function(ev) {
-        var _ref;
-        if ((_ref = ev.keyCode) === 17 || _ref === 224) {
-          return ctlDown = false;
-        }
-      });
-      $(textarea).on('keydown', function(ev) {
-        var _ref;
-        if ((_ref = ev.keyCode) === 17 || _ref === 224) {
-          ctlDown = true;
-        }
-        if (ctlDown && ev.keyCode === 86) {
-          return paste._container.focus();
-        }
-      });
-      $(paste._target).on('pasteImage', (function(_this) {
-        return function() {
-          return $(textarea).focus();
-        };
-      })(this));
-      $(paste._target).on('pasteText', (function(_this) {
-        return function() {
-          return $(textarea).focus();
-        };
-      })(this));
-      $(textarea).on('focus', (function(_this) {
-        return function() {
-          return $(textarea).addClass('pastable-focus');
-        };
-      })(this));
-      return $(textarea).on('blur', (function(_this) {
-        return function() {
-          return $(textarea).removeClass('pastable-focus');
-        };
-      })(this));
-    };
+		return elems;
+	};
 
-    Paste.mountContenteditable = function(contenteditable) {
-      var paste;
-      paste = new Paste(contenteditable, contenteditable);
-      $(contenteditable).on('focus', (function(_this) {
-        return function() {
-          return $(contenteditable).addClass('pastable-focus');
-        };
-      })(this));
-      return $(contenteditable).on('blur', (function(_this) {
-        return function() {
-          return $(contenteditable).removeClass('pastable-focus');
-        };
-      })(this));
-    };
+	Paste.initContenteditable = function (elem) {
+		var paste = new Paste(elem, elem);
 
-    function Paste(_container, _target) {
-      this._container = _container;
-      this._target = _target;
-      this._container = $(this._container);
-      this._target = $(this._target).addClass('pastable');
-      this._container.on('paste', (function(_this) {
-        return function(ev) {
-          var clipboardData, file, item, reader, text, _i, _j, _len, _len1, _ref, _ref1, _ref2, _ref3, _results;
-          if (((_ref = ev.originalEvent) != null ? _ref.clipboardData : void 0) != null) {
-            clipboardData = ev.originalEvent.clipboardData;
-            if (clipboardData.items) {
+		elem.addEventListener('focus', function () {
+			elem.classList.add('pastable-focus');
+		});
+		elem.addEventListener('focus', function () {
+			elem.classList.remove('pastable-focus');
+		});
+	};
 
-              // Chrome
-              _ref1 = clipboardData.items;
-              for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
-                item = _ref1[_i];
-                if (item.type.match(/^image\//)) {
-                  var imgURL = URL.createObjectURL(item.getAsFile());
-                  return _this._handleImage(imgURL);
-                }
-                if (item.type === 'text/plain') {
-                  item.getAsString(function(string) {
-                    return _this._target.trigger('pasteText', {
-                      text: string
-                    });
-                  });
-                }
-              }
-            } else {
+	Paste.initNonInputable = function (elem) {
+		var paste = new Paste(elem.appendChild(createHiddenEditable()), elem);
 
-              // Firefox & Safari(text-only)
-              if (-1 !== Array.prototype.indexOf.call(clipboardData.types, 'text/plain')) {
-                text = clipboardData.getData('Text');
-                _this._target.trigger('pasteText', {
-                  text: text
-                });
-              }
-              _this._checkImagesInContainer(function(src) {
-                return _this._handleImage(src);
-              });
-            }
-          }
+		elem.addEventListener('click', function () {
+			paste._container.focus();
+		});
+		elem.addEventListener('focus', function () {
+			this.classList.add('pastable-focus');
+		});
+		elem.addEventListener('blur', function () {
+			this.classList.remove('pastable-focus');
+		});
+	};
 
-          // IE
-          if (clipboardData = window.clipboardData) {
-            if ((_ref2 = (text = clipboardData.getData('Text'))) != null ? _ref2.length : void 0) {
-              return _this._target.trigger('pasteText', {
-                text: text
-              });
-            } else {
-              _ref3 = clipboardData.files;
-              _results = [];
-              for (_j = 0, _len1 = _ref3.length; _j < _len1; _j++) {
-                file = _ref3[_j];
-                _this._handleImage(URL.createObjectURL(file));
-                _results.push(_this._checkImagesInContainer(function() {}));
-              }
-              return _results;
-            }
-          }
-        };
-      })(this));
-    }
+	Paste.initTextarea = function (textarea) {
+		if (!navigator.userAgent.toLowerCase().match(/firefox|trident|edge/)) {
+			return this.initContenteditable(textarea);
+		};
 
-    Paste.prototype._handleImage = function(src) {
-      var loader;
-      loader = new Image();
-      loader.onload = (function(_this) {
-        return function() {
-          return _this._target.trigger('pasteImage', {
-            image: loader,
-            width: loader.width,
-            height: loader.height
-          });
-        };
-      })(this);
-      return loader.src = src;
-    };
+		var paste = new Paste(textarea.parentNode.insertBefore(createHiddenEditable(), textarea), textarea);
+		var ctlDown = false;
 
-    Paste.prototype._checkImagesInContainer = function(cb) {
-      var img, timespan, _i, _len, _ref;
-      timespan = Math.floor(1000 * Math.random());
-      _ref = this._container.find('img');
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        img = _ref[_i];
-        img["_paste_marked_" + timespan] = true;
-      }
-      return setTimeout((function(_this) {
-        return function() {
-          var _j, _len1, _ref1, _results;
-          _ref1 = _this._container.find('img');
-          _results = [];
-          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-            img = _ref1[_j];
-            if (!img["_paste_marked_" + timespan]) {
-              cb(img.src);
-            }
-            _results.push($(img).remove());
-          }
-          return _results;
-        };
-      })(this), 1);
-    };
+		textarea.addEventListener('keyup', function (ev) {
+			var ref;
+			
+			if ((ref = ev.keyCode) === 17 || ref === 224) {
+				ctlDown = false;
+			}
+			return null;
+		});
+		textarea.addEventListener('keydown', function (ev) {
+			var ref;
+			
+			if ((ref = ev.keyCode) === 17 || ref === 224) {
+				ctlDown = true;
+			}
+			if ((ev.ctrlKey != null) && (ev.metaKey != null)) {
+				ctlDown = ev.ctrlKey || ev.metaKey;
+			}
+			if (ctlDown && ev.keyCode === 86) {
+				paste._textarea_focus_stolen = true;
+				paste._container.focus();
+				paste._paste_event_fired = false;
+				setTimeout((function (_this) {
+					return function () {
+						if (!paste._paste_event_fired) {
+							textarea.focus();
+							return paste._textarea_focus_stolen = false;
+						}
+					};
+				})(this), 1);
+			}
+			return null;
+		});
+		textarea.addEventListener('focus', function () {
+			if (!paste._textarea_focus_stolen) {
+				return textarea.classList.add('pastable-focus');
+			}
+		});
+		textarea.addEventListener('blur', function () {
+			if (!paste._textarea_focus_stolen) {
+				return textarea.classList.remove('pastable-focus');
+			}
+		});
+		paste._target.addEventListener('_pasteCheckContainerDone', function () {
+			textarea.focus();
+			return paste._textarea_focus_stolen = false;
+		});
+		return paste._target.addEventListener('pasteText', function (ev) {
+			var curStart = textarea.selectionStart;
+			var curEnd = textarea.selectionEnd;
+			var content = textarea.value;
 
-    return Paste;
+			textarea.value = "" + content.slice(0, curStart) + ev.detail.text + content.slice(curEnd);
+			textarea.setSelectionRange(curStart + ev.detail.text.length, curStart + ev.detail.text.length);
+			
+			return trigger(textarea, 'change');
+		});
+	};
 
-  })();
+	function Paste(_container, _target) {
+		this._container = _container;
+		this._target = _target;
+		this._target.classList.add('pastable');
 
-}).call(this);
+		this._container.addEventListener('paste', (function (_this) {
+			return function (ev) {
+				var clipboardData, ref, ref2, text;
+
+				if (((ref = ev) != null ? ref.clipboardData : void 0) != null) {
+					clipboardData = ev.clipboardData;
+					if (clipboardData.items) {
+
+						// Хром
+						var ref1 = clipboardData.items;
+						
+						for (var i = 0, len = ref1.length, item; i < len; i++) {
+							item = ref1[i];
+							
+							if (item.type.match(/^image\//)) {
+								return _this._handleImage(item.getAsFile());
+							}
+							else if (item.type === 'text/plain') {
+								item.getAsString(function (string) {
+									_this._handleText(string);
+								});
+							}
+						}
+					}
+					
+					// ФФ и Сафари
+					else {
+						if (-1 !== Array.prototype.indexOf.call(clipboardData.types, 'text/plain')) {
+							text = clipboardData.getData('Text');
+							setTimeout(function() {
+								_this._handleText(text);
+							}, 1);
+						}
+						_this._checkImagesInContainer(function (src) {
+							if (src.match(/data:/)) {
+								return _this._handleImage(dataURItoBlob(src));
+							}
+							
+							// если получено не закодированное
+							// значит, скорее всего, ссылка
+							else {
+								return;
+							};
+						});
+					}
+				}
+
+				// ИЕ
+				if (clipboardData = window.clipboardData) {
+					if ((ref2 = (text = clipboardData.getData('Text'))) != null ? ref2.length : void 0) {
+						setTimeout(function() {
+							_this._handleText(string);
+							return _this._target.trigger('_pasteCheckContainerDone');
+						}, 1);
+					}
+					else {
+						var ref3 = clipboardData.files;
+						
+						for (var j = 0, len1 = ref3.length, file; j < len1; j++) {
+							file = ref3[j];
+							_this._handleImage(file);
+						};
+						
+						_this._checkImagesInContainer(function(src) {});
+					}
+				};
+				
+				return null;
+			};
+		})(this));
+	}
+
+	Paste.prototype._handleImage = function (blob) {
+		trigger(this._target, 'pasteImage', {
+			blob: blob
+		})
+	};
+
+	Paste.prototype._handleText = function (text) {
+		trigger(this._target, 'pasteText', {
+			text: text
+		});
+	};
+
+	Paste.prototype._checkImagesInContainer = function (cb) {
+		var timespan = Math.floor(1000 * Math.random());
+		var ref = this._container.querySelectorAll('img');
+
+		for (var i = 0, len = ref.length, img; i < len; i++) {
+			img = ref[i];
+			img["_paste_marked_" + timespan] = true;
+		};
+
+		return setTimeout((function (_this) {
+			return function () {
+				var ref1 = _this._container.querySelectorAll('img');
+
+				for (var _j = 0, len1 = ref1.length; _j < len1; _j++) {
+					img = ref1[_j];
+					
+					if (!img["_paste_marked_" + timespan]) {
+						cb(img.src);
+					};
+					
+					img.remove();
+				}
+
+				return trigger(_this._target, '_pasteCheckContainerDone');
+			};
+		})(this), 1);
+	};
+
+	return Paste;
+
+})();

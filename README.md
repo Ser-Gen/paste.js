@@ -1,10 +1,11 @@
-paste.js
-=====
+# paste.js
 
-paste.js is an interface to read data ( text / image ) from clipboard in different browsers. It also contains several hacks.
+`paste.js` это интерфейс для чтения информации (текст / изображение) из буфера обмена в различных браузерах. Он также содержит немного браузерных хаков.
 
-browser compatibility
------
+В этом репозитории находится глубокая переработка исходной функции. Эта не требует `jQuery`, имеет другой интерфейс и возвращает в случае изображений только `blob`.
+
+
+## Совместимость
 
 |                              | IE11 | Firefox 33 | Chrome 38 | Safari | Opera |
 |------------------------------|------|------------|-----------|--------|-------|
@@ -15,24 +16,32 @@ browser compatibility
 | pasteImage (textarea)        | ok   | ok         | ok        |        |       |
 | pasteImage (contenteditable) | ok   | ok         | ok        |        |       |
 
-usage
------
+## Использование
 
 ```js
-// jQuery needed
-$('.mydiv, textarea, div[contenteditable]').pastableElement();
 
-$('*').on('pasteImage', function (ev, data){
-  console.log("dataURL: " + data.dataURL);
-  console.log("width: " + data.width);
-  console.log("height: " + data.height);
-  console.log(data.blob);
-}).on('pasteText', function (ev, data){
-  console.log("text: " + data.text);
+// инициализация
+// в init можно передавать массив элементов или селектор
+// init возвращает массив элементов, к которым применён
+[].forEach.call(Paste.init('.example'), function (example) {
+	
+	// обработчик события вставки изображения
+	example.addEventListener('pasteImage', function (e) {
+		var resultItem = document.createElement('div');
+		var i = document.createElement('img');
+
+		// изображение передаётся в виде blob
+		i.src = URL.createObjectURL(e.detail.blob);
+		resultItem.appendChild(i);
+		result.appendChild(resultItem);
+	});
+
+	// обработчик события вставки текста
+	example.addEventListener('pasteText', function (e) {
+		var resultItem = document.createElement('div');
+
+		resultItem.innerHTML = e.detail.text;
+		result.appendChild(resultItem);
+	});
 });
 ```
-
-more
------
-
-see [this example](http://micy.in/paste.js/)
