@@ -17,6 +17,10 @@ var Paste = (function () {
 		return elem;
 	};
 
+	var isNodeList = function (nodes) {
+		return NodeList.prototype.isPrototypeOf(nodes);
+	};
+
 	// генерация событий
 	var trigger = function (elem, name, data) {
 		var event;
@@ -60,8 +64,11 @@ var Paste = (function () {
 		if (typeof elems === 'string') {
 			elems = document.querySelectorAll(elems);
 		}
-		else if (!elems.isArray) {
-			elems = [].push(elems);
+		else if (!elems.isArray && !isNodeList(elems)) {
+			var tmp = [];
+
+			tmp.push(elems);
+			elems = tmp;
 		};
 
 		[].forEach.call(elems, function (elem) {
