@@ -1,3 +1,11 @@
+/*
+ * Paste
+ * https://github.com/Ser-Gen/paste.js
+ * Version 1.0.1
+ *
+ * Vanillajs fork of https://github.com/layerssss/paste.js
+ */
+
 var Paste = (function () {
 
 	// протез для удаления узла
@@ -85,6 +93,10 @@ var Paste = (function () {
 	Paste.prototype._container = null;
 
 	Paste.init = function (elems) {
+		if (!elems) {
+			return [];
+		};
+
 		if (typeof elems === 'string') {
 			elems = document.querySelectorAll(elems);
 		}
